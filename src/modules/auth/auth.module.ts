@@ -7,6 +7,11 @@ import { ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { LocalStrategy } from './passport/local.strategy';
 import { JwtStrategy } from './passport/jwt.strategy';
+import { MongooseModule } from '@nestjs/mongoose';
+import {
+  RefreshToken,
+  RefreshTokenSchema,
+} from './schemas/refreshToken.schema';
 
 @Module({
   imports: [
@@ -14,7 +19,7 @@ import { JwtStrategy } from './passport/jwt.strategy';
     JwtModule.registerAsync({
       useFactory: async (configService: ConfigService) => ({
         global: true,
-        secret: configService.get<string>('JWT_SECRET_KEY'),
+        secret: configService.get<string>('JWT_ACCESS_TOKEN_SECRET_KEY'),
         signOptions: {
           expiresIn: configService.get<string>('JWT_ACCESS_TOKEN_EXPIRED'),
         },
@@ -22,6 +27,9 @@ import { JwtStrategy } from './passport/jwt.strategy';
       inject: [ConfigService],
     }),
     PassportModule,
+    MongooseModule.forFeature([
+      { name: RefreshToken.name, schema: RefreshTokenSchema },
+    ]),
   ],
   controllers: [AuthController],
   providers: [AuthService, LocalStrategy, JwtStrategy],

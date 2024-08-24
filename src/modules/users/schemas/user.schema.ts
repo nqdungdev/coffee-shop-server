@@ -1,4 +1,6 @@
+import { VerifyStatus } from '@/constants/enums';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { IsEnum } from 'class-validator';
 import { HydratedDocument } from 'mongoose';
 
 export type UserDocument = HydratedDocument<User>;
@@ -15,6 +17,9 @@ export class User {
   password: string;
 
   @Prop()
+  date_of_birth: Date;
+
+  @Prop()
   phone: string;
 
   @Prop()
@@ -29,14 +34,15 @@ export class User {
   @Prop({ default: 'LOCAL' })
   accountType: string;
 
-  @Prop({ default: false })
-  isActive: boolean;
+  @Prop()
+  verify_token?: string;
 
   @Prop()
-  codeId: string;
+  forgot_password_token?: string;
 
-  @Prop()
-  codeExpired: Date;
+  @Prop({ type: Number, enum: VerifyStatus, default: VerifyStatus.Unverified })
+  @IsEnum(VerifyStatus)
+  verify?: VerifyStatus;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

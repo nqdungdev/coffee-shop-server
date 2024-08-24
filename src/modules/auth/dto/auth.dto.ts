@@ -1,4 +1,5 @@
 import { IsEmail, IsNotEmpty, IsOptional } from 'class-validator';
+import { Types } from 'mongoose';
 
 export class LoginDto {
   @IsNotEmpty()
@@ -18,5 +19,24 @@ export class RegisterDto {
   password: string;
 
   @IsOptional()
-  name: string;
+  name?: string;
+
+  @IsOptional()
+  date_of_birth?: Date;
+
+  @IsOptional()
+  phone?: string;
+}
+
+export class VerifyDto {
+  @IsNotEmpty()
+  verify_token: string;
+
+  @IsNotEmpty()
+  user_id: string;
+}
+
+export class ResendVerificationDto {
+  @IsNotEmpty()
+  email: string;
 }
