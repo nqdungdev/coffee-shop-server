@@ -8,7 +8,14 @@ import {
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { comparePassword, hashPassword } from 'src/utils/bcrypt';
-import { RegisterDto, ResendVerificationDto, VerifyDto } from './dto/auth.dto';
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  RegisterDto,
+  ResendVerificationDto,
+  ResetPasswordDto,
+  VerifyDto,
+} from './dto/auth.dto';
 import { TokenType, VerifyStatus } from '@/constants/enums';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -62,17 +69,10 @@ export class AuthService {
     });
   }
 
-  private signForgotPasswordToken({
-    userId,
-    verify,
-  }: {
-    userId: string;
-    verify: VerifyStatus;
-  }) {
+  private signForgotPasswordToken(email: string) {
     const payload = {
-      userId,
+      email,
       token_type: TokenType.ForgotPasswordToken,
-      verify,
     };
     return this.jwtService.sign(payload, {
       secret: this.configService.get<string>(
@@ -141,7 +141,13 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto): Promise<any> {
-    const { email } = registerDto;
+    const { email, password, confirm_password } = registerDto;
+
+    if (password !== confirm_password) {
+      throw new BadRequestException(
+        'Password and confirm password do not match',
+      );
+    }
     const verify_token = await this.signVerifyToken({
       email,
       verify: VerifyStatus.Unverified,
@@ -165,54 +171,60 @@ export class AuthService {
   }
 
   async resendVerification(
-    resendVerification: ResendVerificationDto,
+    resendVerificationDto: ResendVerificationDto,
   ): Promise<any> {
-    const { email } = resendVerification;
+    const { email } = resendVerificationDto;
     const verify_token = await this.signVerifyToken({
       email,
       verify: VerifyStatus.Unverified,
     });
     return await this.usersService.resendVerification(
-      resendVerification,
+      resendVerificationDto,
       verify_token,
     );
   }
 
-  // async register(registerDto: RegisterDto) {
-  //   const { email, password, name, date_of_birth, phone } = registerDto;
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<any> {
+    const { email } = forgotPasswordDto;
+    const forgot_password_token = await this.signForgotPasswordToken(email);
+    return await this.usersService.forgotPassword(
+      forgotPasswordDto,
+      forgot_password_token,
+    );
+  }
 
-  //   const email_verify_token = await this.signEmailVerifyToken({
-  //     email,
-  //     verify: VerifyStatus.Unverified,
-  //   });
+  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<any> {
+    const { forgot_password_token } = resetPasswordDto;
 
-  //   await databaseService.users.insertOne(
-  //     new User({
-  //       ...payload,
-  //       _id: user_id,
-  //       username: `user${user_id.toString()}`,
-  //       email_verify_token,
-  //       date_of_birth: new Date(payload.date_of_birth),
-  //       password: hashPassword(payload.password),
-  //     }),
-  //   );
+    const { exp } = await this.verifyToken(
+      forgot_password_token,
+      this.configService.get<string>('JWT_FORGOT_PASSWORD_TOKEN_SECRET_KEY'),
+    );
 
-  //   const [access_token, refresh_token] = await this.signAccessAndRefreshToken({
-  //     user_id: user_id.toString(),
-  //     verify: UserVerifyStatus.Unverified,
-  //   });
+    if (exp < Math.floor(Date.now() / 1000)) {
+      throw new UnauthorizedException('Verification token expired');
+    }
 
-  //   const { iat, exp } = await this.decodeRefreshToken(refresh_token);
+    return await this.usersService.resetPassword(resetPasswordDto);
+  }
 
-  //   await databaseService.refreshTokens.insertOne(
-  //     new RefreshToken({
-  //       user_id: new ObjectId(user_id),
-  //       token: refresh_token,
-  //       iat,
-  //       exp,
-  //     }),
-  //   );
+  async changePassword(
+    changePasswordDto: ChangePasswordDto,
+    user: any,
+  ): Promise<any> {
+    const { password, new_password, confirm_new_password } = changePasswordDto;
+    const payload = { sub: user._id, username: user.email };
+    if (new_password !== confirm_new_password) {
+      throw new BadRequestException(
+        'New password and confirm password do not match',
+      );
+    }
 
-  //   return { access_token, refresh_token };
-  // }
+    const isValidPassword = await comparePassword(password, user.password);
+    if (!isValidPassword) {
+      throw new UnauthorizedException(`Current password is not correct`);
+    }
+
+    return await this.usersService.changePassword(changePasswordDto, payload);
+  }
 }

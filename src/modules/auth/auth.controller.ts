@@ -16,7 +16,12 @@ import {
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './passport/local-auth.guard';
 import { Public } from 'src/decorator/customize';
-import { RegisterDto, ResendVerificationDto } from './dto/auth.dto';
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  RegisterDto,
+  ResendVerificationDto,
+} from './dto/auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -46,6 +51,33 @@ export class AuthController {
   @Post('resend-verification')
   resendVerification(@Body() resendVerificationDto: ResendVerificationDto) {
     return this.authService.resendVerification(resendVerificationDto);
+  }
+
+  @Post('forgot-password')
+  @Public()
+  forgotPassword(@Body('email') forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Query('id') user_id: string,
+    @Query('token') forgot_password_token: string,
+    @Body('new_password') new_password: string,
+  ) {
+    await this.authService.resetPassword({
+      user_id,
+      forgot_password_token,
+      new_password,
+    });
+    return { message: 'Password reset successfully' };
+  }
+
+  @Post('change-password')
+  changePassword(@Body() changePasswordDto: ChangePasswordDto, @Request() req) {
+    return this.authService.changePassword(changePasswordDto, req.user);
   }
 
   @Get('profile')

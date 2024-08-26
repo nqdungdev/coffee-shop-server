@@ -12,8 +12,11 @@ import { User } from './schemas/user.schema';
 import { isValidObjectId, Model } from 'mongoose';
 import { hashPassword } from 'src/utils/bcrypt';
 import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
   RegisterDto,
   ResendVerificationDto,
+  ResetPasswordDto,
   VerifyDto,
 } from '../auth/dto/auth.dto';
 import { MailService } from '../mail/mail.service';
@@ -33,6 +36,10 @@ export class UsersService {
 
   async findByEmail(email: string) {
     return this.userModel.findOne({ email });
+  }
+
+  async findById(_id: string) {
+    return this.userModel.findOne({ _id });
   }
 
   async create(createUserDto: CreateUserDto) {
@@ -120,7 +127,13 @@ export class UsersService {
       verify_token,
     });
 
-    this.mailService.sendUserConfirmation(user, verify_token);
+    const url = `http://localhost:4000/api/auth/verify?id=${user._id}&token=${verify_token}`;
+
+    this.mailService.sendUserConfirmation({
+      user,
+      subject: 'Welcome to Nice App! Confirm your Email',
+      url,
+    });
 
     return {
       _id: user._id,
@@ -142,9 +155,6 @@ export class UsersService {
       { verify_token: '', verify: VerifyStatus.Verified },
     );
 
-    // // Delete the token after successful verification
-    // await this.verificationTokenModel.deleteOne({ _id: storedToken._id });
-
     return { message: 'Email verified successfully' };
   }
 
@@ -159,7 +169,6 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Kiểm tra xem email đã được xác thực chưa
     if (user.verify === VerifyStatus.Verified) {
       throw new ConflictException('Email is already verified');
     }
@@ -169,8 +178,78 @@ export class UsersService {
       { verify_token, verify: VerifyStatus.Unverified },
     );
 
-    this.mailService.sendUserConfirmation(user, verify_token);
+    const url = `http://localhost:4000/api/auth/verify?id=${user._id}&token=${verify_token}`;
+
+    this.mailService.sendUserConfirmation({
+      user,
+
+      subject: 'Welcome to Nice App! Confirm your Email',
+      url,
+    });
 
     return { message: 'Verification email resent successfully' };
+  }
+
+  async forgotPassword(
+    forgotPasswordDto: ForgotPasswordDto,
+    forgot_password_token: string,
+  ) {
+    const { email } = forgotPasswordDto;
+
+    const user = await this.findByEmail(email);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.userModel.updateOne({ _id: user._id }, { forgot_password_token });
+
+    const url = `http://localhost:3000/auth/reset-password?userId=${user.id}&token=${forgot_password_token}`;
+    this.mailService.sendUserConfirmation({
+      user,
+      subject: 'Change your password account',
+      url,
+    });
+    return { _id: user._id, email: user.email };
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const { user_id, forgot_password_token, new_password } = resetPasswordDto;
+    const user = await this.findById(user_id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user || user.forgot_password_token !== forgot_password_token) {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+
+    const hashedPassword = await hashPassword(new_password);
+
+    await this.userModel.updateOne(
+      { _id: user_id },
+      {
+        password: hashedPassword,
+        forgot_password_token: '',
+      },
+    );
+
+    return {
+      message: 'RESET_PASSWORD_SUCCESS',
+    };
+  }
+
+  async changePassword(
+    changePasswordDto: ChangePasswordDto,
+    user: { sub: string; username: string },
+  ) {
+    const { password } = changePasswordDto;
+
+    const hashedPassword = await hashPassword(password);
+    await this.userModel.updateOne(
+      { _id: user.sub },
+      { password: hashedPassword },
+    );
+
+    return { message: 'Password changed successfully' };
   }
 }

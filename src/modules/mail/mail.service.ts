@@ -6,12 +6,18 @@ import { Mail } from './schemas/mail.schema';
 export class MailService {
   constructor(private mailerService: MailerService) {}
 
-  async sendUserConfirmation(user: Mail, token: string) {
-    const url = `http://localhost:4000/api/auth/verify?id=${user._id}&token=${token}`;
-
+  async sendUserConfirmation({
+    user,
+    subject,
+    url,
+  }: {
+    user: Mail;
+    subject: string;
+    url: string;
+  }) {
     await this.mailerService.sendMail({
       to: user.email,
-      subject: 'Welcome to Nice App! Confirm your Email',
+      subject: subject,
       template: 'confirmation',
       context: {
         name: user?.name ?? user.email,
